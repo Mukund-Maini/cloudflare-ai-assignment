@@ -217,7 +217,7 @@ function Chat() {
             <div>
               <h1 className="text-base font-semibold">TaskPilot</h1>
               <p className="text-xs text-zinc-500">
-                AI task assistant &middot; Powered by Llama 3.3 on Cloudflare
+                AI task assistant &middot; Powered by Workers AI on Cloudflare
               </p>
             </div>
           </div>

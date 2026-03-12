@@ -1,7 +1,12 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import { routeAgentRequest } from "agents";
 import { createWorkersAI } from "workers-ai-provider";
-import { streamText, convertToModelMessages, tool, stepCountIs } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  tool,
+  stepCountIs,
+} from "ai";
 import { z } from "zod";
 
 type Task = {
@@ -15,69 +20,47 @@ type AgentState = {
   tasks: Task[];
   userName: string | null;
   mood: string | null;
-  lastSummary: string | null;
 };
 
 const DEFAULT_STATE: AgentState = {
   tasks: [],
   userName: null,
   mood: null,
-  lastSummary: null,
 };
 
 export class TaskAgent extends AIChatAgent<Env, AgentState> {
   initialState: AgentState = DEFAULT_STATE;
 
-  onStart(): void {
-    this.schedule("0 9 * * 1-5", "dailySummary");
-  }
-
-  async dailySummary() {
-    const tasks = this.state.tasks;
-    const pending = tasks.filter((t) => !t.done);
-    if (pending.length === 0) return;
-
-    const workersai = createWorkersAI({ binding: this.env.AI });
-    const { text } = await streamText({
-      model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-      prompt: `Summarize these pending tasks in a motivating way: ${pending.map((t) => t.text).join(", ")}`,
-    });
-    this.setState({
-      ...this.state,
-      lastSummary: text,
-    });
-  }
-
   async onChatMessage(
     _onFinish: unknown,
     options?: OnChatMessageOptions
   ) {
+    try {
     const workersai = createWorkersAI({ binding: this.env.AI });
 
     const pendingTasks = this.state.tasks.filter((t) => !t.done);
     const completedTasks = this.state.tasks.filter((t) => t.done);
 
-    const systemPrompt = `You are a helpful AI task assistant running on Cloudflare Workers. Your name is TaskPilot.
+    const systemPrompt = `You are a helpful AI task assistant called TaskPilot running on Cloudflare Workers.
 
 Current user context:
 - User name: ${this.state.userName ?? "not set yet"}
 - Mood: ${this.state.mood ?? "unknown"}
 - Pending tasks (${pendingTasks.length}): ${pendingTasks.map((t) => `"${t.text}"`).join(", ") || "none"}
 - Completed tasks (${completedTasks.length}): ${completedTasks.map((t) => `"${t.text}"`).join(", ") || "none"}
-${this.state.lastSummary ? `- Last daily summary: ${this.state.lastSummary}` : ""}
 
 You help the user manage tasks, track progress, and stay productive. Be concise and friendly.
 When the user tells you their name, use the setUserProfile tool. When they want to manage tasks, use the appropriate task tools.
-Always confirm actions you've taken. Use markdown formatting for lists.`;
+Always confirm actions you've taken.`;
 
     const result = streamText({
-      model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
+      model: workersai("@cf/zai-org/glm-4.7-flash"),
       system: systemPrompt,
       messages: await convertToModelMessages(this.messages),
       tools: {
         addTask: tool({
           description:
-            "Add a new task to the user's task list. Use when the user asks to add, create, or remember a task.",
+            "Add a new task to the user's task list.",
           inputSchema: z.object({
             text: z.string().describe("The task description"),
           }),
@@ -143,7 +126,7 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
 
         listTasks: tool({
           description:
-            "List all tasks. Can filter by status (all, pending, completed).",
+            "List all tasks. Can filter by status.",
           inputSchema: z.object({
             filter: z
               .enum(["all", "pending", "completed"])
@@ -182,26 +165,23 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
             };
           },
         }),
-
-        getCurrentTime: tool({
-          description:
-            "Get the current UTC time. Useful when the user asks about time or for scheduling.",
-          inputSchema: z.object({}),
-          execute: async () => ({ time: new Date().toISOString() }),
-        }),
       },
       stopWhen: stepCountIs(5),
       abortSignal: options?.abortSignal,
     });
 
     return result.toUIMessageStreamResponse();
+    } catch (err) {
+      console.error("onChatMessage error:", err);
+      throw err;
+    }
   }
 }
 
 export default {
   async fetch(request: Request, env: Env) {
     return (
-      (await routeAgentRequest(request, env)) ??
+      (await routeAgentRequest(request, env)) ||
       env.ASSETS.fetch(request)
     );
   },

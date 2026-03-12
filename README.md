@@ -6,7 +6,7 @@ An AI-powered task management assistant built entirely on Cloudflare, using the 
 
 | Requirement | Implementation |
 |---|---|
-| **LLM** | Llama 3.3 70B via Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`) |
+| **LLM** | GLM-4.7 Flash via Workers AI (`@cf/zai-org/glm-4.7-flash`) with native function calling |
 | **Workflow / Coordination** | Durable Objects (via `AIChatAgent`) with tool orchestration and cron scheduling |
 | **User Input (Chat)** | WebSocket-based real-time chat UI built with React + `useAgentChat` |
 | **Memory / State** | Persistent agent state (tasks, user profile, mood) synced to all clients in real-time; SQLite-backed message history with automatic resumable streams |
