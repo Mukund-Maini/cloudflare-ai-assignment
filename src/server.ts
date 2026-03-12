@@ -1,15 +1,8 @@
-import { AIChatAgent } from "agents/ai-chat-agent";
+import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import { routeAgentRequest } from "agents";
 import { createWorkersAI } from "workers-ai-provider";
-import {
-  streamText,
-  convertToModelMessages,
-  tool,
-  type StreamTextOnFinishCallback,
-  type ToolSet,
-} from "ai";
+import { streamText, convertToModelMessages, tool, stepCountIs } from "ai";
 import { z } from "zod";
-import type { OnChatMessageOptions } from "agents/ai-chat-agent";
 
 type Task = {
   id: string;
@@ -56,7 +49,7 @@ export class TaskAgent extends AIChatAgent<Env, AgentState> {
   }
 
   async onChatMessage(
-    onFinish: StreamTextOnFinishCallback<ToolSet>,
+    _onFinish: unknown,
     options?: OnChatMessageOptions
   ) {
     const workersai = createWorkersAI({ binding: this.env.AI });
@@ -85,7 +78,7 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
         addTask: tool({
           description:
             "Add a new task to the user's task list. Use when the user asks to add, create, or remember a task.",
-          parameters: z.object({
+          inputSchema: z.object({
             text: z.string().describe("The task description"),
           }),
           execute: async ({ text }) => {
@@ -106,7 +99,7 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
         completeTask: tool({
           description:
             "Mark a task as done. Match by task text (partial match okay).",
-          parameters: z.object({
+          inputSchema: z.object({
             searchText: z
               .string()
               .describe("Text to search for in the task list"),
@@ -129,7 +122,7 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
 
         removeTask: tool({
           description: "Remove a task from the list entirely.",
-          parameters: z.object({
+          inputSchema: z.object({
             searchText: z
               .string()
               .describe("Text to search for in the task list"),
@@ -151,7 +144,7 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
         listTasks: tool({
           description:
             "List all tasks. Can filter by status (all, pending, completed).",
-          parameters: z.object({
+          inputSchema: z.object({
             filter: z
               .enum(["all", "pending", "completed"])
               .default("all")
@@ -172,7 +165,7 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
 
         setUserProfile: tool({
           description: "Set or update the user's name and/or mood.",
-          parameters: z.object({
+          inputSchema: z.object({
             name: z.string().optional().describe("The user's name"),
             mood: z.string().optional().describe("The user's current mood"),
           }),
@@ -193,14 +186,11 @@ Always confirm actions you've taken. Use markdown formatting for lists.`;
         getCurrentTime: tool({
           description:
             "Get the current UTC time. Useful when the user asks about time or for scheduling.",
-          parameters: z.object({}),
-          execute: async () => {
-            return { time: new Date().toISOString() };
-          },
+          inputSchema: z.object({}),
+          execute: async () => ({ time: new Date().toISOString() }),
         }),
       },
-      maxSteps: 5,
-      onFinish,
+      stopWhen: stepCountIs(5),
       abortSignal: options?.abortSignal,
     });
 

@@ -1,7 +1,43 @@
 import { useAgent } from "agents/react";
-import { useAgentChat } from "agents/ai-react";
-import { useState, useRef, useEffect } from "react";
+import { useAgentChat } from "@cloudflare/ai-chat/react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  Component,
+  type ReactNode,
+} from "react";
 import type { UIMessage } from "ai";
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-zinc-950 text-white p-8">
+          <div className="max-w-lg text-center">
+            <h1 className="text-xl font-semibold text-red-400 mb-4">
+              Something went wrong
+            </h1>
+            <pre className="text-xs text-zinc-400 bg-zinc-900 rounded-lg p-4 overflow-auto text-left whitespace-pre-wrap">
+              {this.state.error.message}
+              {"\n\n"}
+              {this.state.error.stack}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type Task = {
   id: string;
@@ -122,9 +158,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
                 key={i}
                 className="my-1 px-2 py-1 rounded bg-zinc-900/50 text-xs text-zinc-400 border border-zinc-700/50"
               >
-                <span className="font-mono">
-                  {toolInvocation.toolName}
-                </span>
+                <span className="font-mono">{toolInvocation.toolName}</span>
                 {toolInvocation.state === "result" && (
                   <span className="ml-2 text-emerald-400">✓</span>
                 )}
@@ -138,20 +172,22 @@ function MessageBubble({ message }: { message: UIMessage }) {
   );
 }
 
-export default function App() {
+function Chat() {
   const [agentState, setAgentState] = useState<AgentState | null>(null);
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const agent = useAgent<AgentState>({
     agent: "task-agent",
-    onStateUpdate: (state) => setAgentState(state),
+    onStateUpdate: useCallback(
+      (state: AgentState) => setAgentState(state),
+      []
+    ),
   });
 
-  const { messages, input, handleInputChange, handleSubmit, status } =
-    useAgentChat({
-      agent,
-    });
-
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const { messages, sendMessage, clearHistory, status } = useAgentChat({
+    agent,
+  });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -159,23 +195,39 @@ export default function App() {
     }
   }, [messages]);
 
-  const isStreaming = status === "streaming";
+  const isStreaming = status === "streaming" || status === "submitted";
+
+  const send = useCallback(() => {
+    const text = input.trim();
+    if (!text || isStreaming) return;
+    setInput("");
+    sendMessage({ role: "user", parts: [{ type: "text", text }] });
+  }, [input, isStreaming, sendMessage]);
 
   return (
     <div className="h-screen flex bg-zinc-950 text-white">
       <TaskSidebar state={agentState} />
 
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-zinc-800 px-6 py-4 flex items-center gap-3 flex-shrink-0">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-sm font-bold">
-            T
+        <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-sm font-bold">
+              T
+            </div>
+            <div>
+              <h1 className="text-base font-semibold">TaskPilot</h1>
+              <p className="text-xs text-zinc-500">
+                AI task assistant &middot; Powered by Llama 3.3 on Cloudflare
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-semibold">TaskPilot</h1>
-            <p className="text-xs text-zinc-500">
-              AI task assistant &middot; Powered by Llama 3.3 on Cloudflare
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={clearHistory}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded hover:bg-zinc-800 cursor-pointer"
+          >
+            Clear chat
+          </button>
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
@@ -188,8 +240,8 @@ export default function App() {
                 Welcome to TaskPilot
               </h2>
               <p className="text-zinc-500 text-sm max-w-md mb-6">
-                I help you manage tasks, stay organized, and keep track of
-                your progress. Try saying:
+                I help you manage tasks, stay organized, and keep track of your
+                progress. Try saying:
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
                 {[
@@ -203,10 +255,10 @@ export default function App() {
                     type="button"
                     className="px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
                     onClick={() => {
-                      const fakeEvent = {
-                        target: { value: suggestion },
-                      } as React.ChangeEvent<HTMLInputElement>;
-                      handleInputChange(fakeEvent);
+                      sendMessage({
+                        role: "user",
+                        parts: [{ type: "text", text: suggestion }],
+                      });
                     }}
                   >
                     {suggestion}
@@ -236,13 +288,22 @@ export default function App() {
 
         <div className="border-t border-zinc-800 px-6 py-4 flex-shrink-0">
           <form
-            onSubmit={handleSubmit}
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
             className="flex gap-2 max-w-3xl mx-auto"
           >
             <input
               type="text"
               value={input}
-              onChange={handleInputChange}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
               placeholder="Ask me to add a task, check your list, or anything else..."
               className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
               disabled={isStreaming}
@@ -262,5 +323,13 @@ export default function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <Chat />
+    </ErrorBoundary>
   );
 }
