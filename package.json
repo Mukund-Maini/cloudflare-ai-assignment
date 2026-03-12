@@ -1,0 +1,36 @@
+{
+  "name": "cloudflare-ai-assignment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TaskPilot — AI-powered task assistant built on Cloudflare Workers AI, Agents SDK, and Durable Objects",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@ai-sdk/react": "^3.0.118",
+    "@cloudflare/ai-chat": "^0.1.8",
+    "agents": "^0.7.6",
+    "ai": "^6.0.116",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "workers-ai-provider": "^3.1.2",
+    "wrangler": "^4.72.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260312.1",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.0",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0"
+  }
+}
