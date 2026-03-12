@@ -26,6 +26,10 @@ An AI-powered task management assistant built entirely on Cloudflare, using the 
 - **Frontend**: React 19 + Tailwind CSS 4 + Vite
 - **SDK**: `agents` (Cloudflare Agents SDK) + `ai` (Vercel AI SDK) + `workers-ai-provider`
 
+## Live Demo
+
+https://ai-task-agent.mukundmaini.workers.dev
+
 ## Getting Started
 
 ```bash
