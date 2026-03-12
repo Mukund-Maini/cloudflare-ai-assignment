@@ -1,5 +1,5 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
-import { routeAgentRequest } from "agents";
+import { routeAgentRequest, callable } from "agents";
 import { createWorkersAI } from "workers-ai-provider";
 import {
   streamText,
@@ -30,6 +30,28 @@ const DEFAULT_STATE: AgentState = {
 
 export class TaskAgent extends AIChatAgent<Env, AgentState> {
   initialState: AgentState = DEFAULT_STATE;
+
+  @callable()
+  async toggleTask(taskId: string) {
+    const task = this.state.tasks.find((t) => t.id === taskId);
+    if (!task) return { success: false };
+    this.setState({
+      ...this.state,
+      tasks: this.state.tasks.map((t) =>
+        t.id === taskId ? { ...t, done: !t.done } : t
+      ),
+    });
+    return { success: true, done: !task.done };
+  }
+
+  @callable()
+  async deleteTask(taskId: string) {
+    this.setState({
+      ...this.state,
+      tasks: this.state.tasks.filter((t) => t.id !== taskId),
+    });
+    return { success: true };
+  }
 
   async onChatMessage(
     _onFinish: unknown,

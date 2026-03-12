@@ -53,7 +53,15 @@ type AgentState = {
   lastSummary: string | null;
 };
 
-function TaskSidebar({ state }: { state: AgentState | null }) {
+function TaskSidebar({
+  state,
+  onToggle,
+  onDelete,
+}: {
+  state: AgentState | null;
+  onToggle: (taskId: string) => void;
+  onDelete: (taskId: string) => void;
+}) {
   if (!state) return null;
 
   const pending = state.tasks.filter((t) => !t.done);
@@ -84,14 +92,25 @@ function TaskSidebar({ state }: { state: AgentState | null }) {
         {pending.length === 0 ? (
           <p className="text-xs text-zinc-600 italic">No pending tasks</p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="space-y-1">
             {pending.map((task) => (
               <li
                 key={task.id}
-                className="text-sm text-zinc-300 flex items-start gap-2"
+                className="group text-sm text-zinc-300 flex items-start gap-2 rounded-lg px-1.5 py-1 hover:bg-zinc-900 transition-colors"
               >
-                <span className="mt-0.5 h-4 w-4 rounded border border-zinc-600 flex-shrink-0" />
-                <span>{task.text}</span>
+                <button
+                  type="button"
+                  onClick={() => onToggle(task.id)}
+                  className="mt-0.5 h-4 w-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                />
+                <span className="flex-1 min-w-0 truncate">{task.text}</span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(task.id)}
+                  className="mt-0.5 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
               </li>
             ))}
           </ul>
@@ -105,32 +124,34 @@ function TaskSidebar({ state }: { state: AgentState | null }) {
         {completed.length === 0 ? (
           <p className="text-xs text-zinc-600 italic">No completed tasks</p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="space-y-1">
             {completed.map((task) => (
               <li
                 key={task.id}
-                className="text-sm text-zinc-500 flex items-start gap-2 line-through"
+                className="group text-sm text-zinc-500 flex items-start gap-2 rounded-lg px-1.5 py-1 hover:bg-zinc-900 transition-colors"
               >
-                <span className="mt-0.5 h-4 w-4 rounded bg-emerald-600/30 border border-emerald-600 flex-shrink-0 flex items-center justify-center text-[10px] text-emerald-400">
+                <button
+                  type="button"
+                  onClick={() => onToggle(task.id)}
+                  className="mt-0.5 h-4 w-4 rounded bg-emerald-600/30 border border-emerald-600 flex-shrink-0 flex items-center justify-center text-[10px] text-emerald-400 hover:bg-emerald-600/50 transition-colors cursor-pointer"
+                >
                   ✓
+                </button>
+                <span className="flex-1 min-w-0 truncate line-through">
+                  {task.text}
                 </span>
-                <span>{task.text}</span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(task.id)}
+                  className="mt-0.5 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
               </li>
             ))}
           </ul>
         )}
       </div>
-
-      {state.lastSummary && (
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-            Daily Summary
-          </h2>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            {state.lastSummary}
-          </p>
-        </div>
-      )}
     </aside>
   );
 }
@@ -204,9 +225,27 @@ function Chat() {
     sendMessage({ role: "user", parts: [{ type: "text", text }] });
   }, [input, isStreaming, sendMessage]);
 
+  const handleToggleTask = useCallback(
+    (taskId: string) => {
+      agent.call("toggleTask", [taskId]);
+    },
+    [agent]
+  );
+
+  const handleDeleteTask = useCallback(
+    (taskId: string) => {
+      agent.call("deleteTask", [taskId]);
+    },
+    [agent]
+  );
+
   return (
     <div className="h-screen flex bg-zinc-950 text-white">
-      <TaskSidebar state={agentState} />
+      <TaskSidebar
+        state={agentState}
+        onToggle={handleToggleTask}
+        onDelete={handleDeleteTask}
+      />
 
       <main className="flex-1 flex flex-col min-w-0">
         <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
