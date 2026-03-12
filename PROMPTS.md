@@ -4,51 +4,36 @@ This project was built with AI-assisted coding using **Cursor** (Claude). Below 
 
 ---
 
-## Initial Project Setup
+## 1. Project Architecture
 
-**Prompt:**
-> See instructions below for Cloudflare AI app assignment. SUBMIT GitHub repo URL for the AI project here. (Please do not submit irrelevant repositories.)
-> Optional Assignment Instructions: We plan to fast track review of candidates who complete an assignment to build a type of AI-powered application on Cloudflare. An AI-powered application should include the following components:
-> LLM (recommend using Llama 3.3 on Workers AI), or an external LLM of your choice
-> Workflow / coordination (recommend using Workflows, Workers or Durable Objects)
-> User input via chat or voice (recommend using Pages or Realtime)
-> Memory or state
-
-**What it did:** Scaffolded the entire project — installed dependencies (`agents`, `workers-ai-provider`, `ai`, `react`, `tailwindcss`, `vite`), created the Wrangler config with Durable Object bindings and AI binding, wrote the `TaskAgent` server class with `AIChatAgent`, tools (addTask, completeTask, removeTask, listTasks, setUserProfile), and the React chat UI with `useAgentChat` hook and a task sidebar. Created the GitHub repo and deployed to Cloudflare.
+> Scaffold a Cloudflare Workers project using the Agents SDK with an AIChatAgent subclass that has persistent state via Durable Objects. Use Workers AI with a model that supports native function calling through the Vercel AI SDK. Set up the frontend with React 19, Vite, and Tailwind CSS 4, connecting to the agent via the useAgentChat hook over WebSocket.
 
 ---
 
-## Debugging: Blank Screen Fix
+## 2. Server-Side Tool Definitions
 
-**Prompt:**
-> now its just showing a blank screen
-
-**What it did:** Added an error boundary to surface the actual error. Discovered the crash was `Cannot read properties of undefined (reading 'trim')` — caused by using the old AI SDK v2 API (`input`, `handleInputChange`, `handleSubmit` from `useChat`) which no longer exists in v3. Fixed by managing input state with `useState` and using `sendMessage()` directly, matching the official agents-starter patterns.
+> Define server-side tools for the AIChatAgent using the AI SDK's `tool()` function with Zod input schemas: addTask, completeTask, removeTask, listTasks, and setUserProfile. Each tool should mutate the agent's Durable Object state via `this.setState()` so changes are broadcast to all connected clients in real-time. Use `convertToModelMessages` for the message history and `stepCountIs(5)` to cap tool use loops.
 
 ---
 
-## Debugging: Tool Calling Not Working
+## 3. Client-Side RPC for Direct State Mutations
 
-**Prompt:**
-> i got this response, but no tasks were added
-
-**What it did:** Identified that Llama 3.3 on Workers AI was outputting tool calls as raw JSON text instead of structured function calls. Switched to `@cf/zai-org/glm-4.7-flash` (the model used by the official Cloudflare agents-starter) which has proper native function calling support through the AI SDK.
+> Add `@callable()` RPC methods on the TaskAgent for toggleTask and deleteTask so the React frontend can call them directly via `agent.call()` over the existing WebSocket connection, bypassing the LLM for UI-driven actions. Wire these up to clickable checkboxes and a hover-reveal delete button in the sidebar component.
 
 ---
 
-## Feature: Interactive Task Sidebar
+## 4. AI SDK v3 Migration
 
-**Prompt:**
-> are you supposed to be able to manually click the task to complete it?
-> yes
-
-**What it did:** Added `@callable()` RPC methods (`toggleTask`, `deleteTask`) to the server-side `TaskAgent` class. Updated the sidebar to have clickable checkboxes that toggle tasks done/undone and a delete button (✕) on hover. The client calls `agent.call("toggleTask", [taskId])` directly over WebSocket for instant state updates without going through the LLM.
+> The useAgentChat hook is crashing because I'm destructuring `input`, `handleInputChange`, and `handleSubmit` which don't exist in @ai-sdk/react v3. Refactor to manage input state locally with useState and use `sendMessage()` directly with the `{ role, parts }` message format. Add an ErrorBoundary wrapper so rendering errors surface visibly instead of showing a blank screen.
 
 ---
 
-## Repo Naming & Documentation
+## 5. Function Calling Model Selection
 
-**Prompt:**
-> IMPORTANT NOTE: To be considered, your repository name must be prefixed with cf_ai_, must include a README.md file with project documentation and clear running instructions to try out components (either locally or via deployed link). AI-assisted coding is encouraged, but you must include AI prompts used in PROMPTS.md
+> Llama 3.3 on Workers AI is emitting tool calls as raw JSON text instead of structured function call responses. Switch to `@cf/zai-org/glm-4.7-flash` which the official cloudflare/agents-starter uses and has verified native function calling support through the workers-ai-provider. Keep the tool definitions and streaming response pattern the same.
 
-**What it did:** Renamed the GitHub repo to `cf_ai_taskpilot`, rewrote README.md with full architecture docs, prerequisites, local dev instructions, deploy steps, and a "Try It Out" walkthrough. Created this PROMPTS.md file.
+---
+
+## 6. Wrangler Configuration
+
+> Configure wrangler.jsonc with a Durable Object binding for TaskAgent with SQLite storage (new_sqlite_classes migration), an AI binding for Workers AI, and a static assets binding pointed at the Vite build output directory. Enable nodejs_compat and observability. Set up package.json scripts so `npm run preview` builds then runs wrangler dev, and `npm run deploy` builds then runs wrangler deploy.
